@@ -53,7 +53,17 @@ void callback( uplift_joint_manager::SpineConfig &config, uint32_t level )
   _spine_driver_position->setMode( motor_mode );
 
   _spine_driver_position->pid->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
-    
+  
+  // if influence has changed, adjust the other influence value
+  if ( config.position_influence > _position_influence + 0.01 || config.position_influence < _position_influence - 0.01 )
+  {
+    config.velocity_influence = 1.0 - config.position_influence;
+  }
+  if ( config.velocity_influence > _velocity_influence + 0.01 || config.velocity_influence < _velocity_influence - 0.01 )
+  {
+    config.position_influence = 1.0 - config.velocity_influence;
+  }
+  
   ROS_INFO("New control parameters set to  P_gain:%f I_gain:%f D_gain:%f", config.p_gain, config.i_gain, config.d_gain);
 }
 
@@ -96,27 +106,40 @@ int main(int argc, char **argv)
   nh.param<std::string>( "hardware_id1", hw_id, "/dev/ttyACM0" );
   nh.param<std::string>( "hardware_id2", hw_id2, "/dev/ttyACM1" );
   
-  _joint_names.push_back("spine");
-  _joint_names.push_back( "arm" );
+  _joint_names.resize(2);
+  _joint_names[SPINE] = "spine";
+  _joint_names[ARM] = "arm";
   
-  lookup = new std::vector<int>(_joint_names.size(), -1);
+  // create lookup table with the same size as the number of joints 
+  lookup( new std::vector<int>(_joint_names.size(), -1));
 
   ArduinoInterface Arduino( hw_id );
   if( Arduino.initialize() == false)
   {
     ROS_ERROR("Error initializing Arduino");
   }  
-  
+
+
   // create joint driver for position control for the spine
-	_spine_driver_position = new JointDriver( &Arduino, SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN, SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, CREATE_NEW_ENCODER, SPINE_LENGTH, JointDriver::POSITION); 	
-	
-  _spine_driver_position->initialize();
-  
+	_spine_driver_position( new JointDriver( 
+                            &Arduino,                                                                                                 // hardware interface
+                            SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,           // Motor pins and settings
+                            SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, CREATE_NEW_ENCODER, SPINE_LENGTH,  // Encoder pins and settings
+                            JointDriver::POSITION)); 	                                                                                // Joint control mode
+  // initalize joint and connected hardware
+  _spine_driver_position->initialize(); 
+  // retrieve encoder id to use in next joint driver
   _spine_encoder_id = _spine_driver_position->getEncoderID();
   
-	_spine_driver_velocity = new JointDriver( &Arduino, SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN, SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, _spine_encoder_id, SPINE_LENGTH, JointDriver::POSITION); 	
-	
+  // creat joint driver for velocity control for the spine
+	_spine_driver_velocity( new JointDriver( 
+	                          &Arduino,                                                                                                 // hardware interface
+	                          SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,           // Motor pins and settings
+	                          SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, _spine_encoder_id, SPINE_LENGTH,   // Encoder pins and settings
+	                          JointDriver::VELOCITY)); 	                                                                                // Joint control mode
+	// initalize joint and connected hardware
 	_spine_driver_velocity->initialize();
+	
 	
 	ros::Subscriber sub = nh.subscribe ("/move_group/result", 5, trajectory_cb);
 	ros::Publisher pub = nh.advertise<sensor_msgs::JointState> ("real_state", 5);
@@ -130,7 +153,6 @@ int main(int argc, char **argv)
   ROS_INFO("Running control loop");
   ros::Rate loop_rate_Hz(100);
   ros::Duration duration_between_points;
-  std_msgs::Float64 read_value;
   
   while ( ros::ok() )
   {
@@ -146,16 +168,19 @@ int main(int argc, char **argv)
       _point_counter++;
       duration_between_points = _trajectory_desired.points[_point_counter].time_from_start - _trajectory_desired.points[_point_counter - 1].time_from_start;
     }
-
-    double current_velocity = _spine_driver_velocity->update( _trajectory_desired.points[_point_counter].velocities[lookup->at(0)] );
-    ROS_INFO("velocity: current:%f  target:%f", current_velocity, _trajectory_desired.points[_point_counter].velocities[lookup->at(0)] );
+    double current_velocity = _spine_driver_velocity->getPosition();
+    double output_velocity_control = _spine_driver_velocity->compute( current_velocity, _trajectory_desired.points[_point_counter].velocities[lookup->at(SPINE)] );
+    ROS_INFO("velocity: current:%f  target:%f  output:%f", current_velocity, _trajectory_desired.points[_point_counter].velocities[lookup->at(SPINE)], output_velocity_control );
+    
+    double current_position = _spine_driver_position->getPosition();//TODO getPosition correct?
+    double output_position_control = _spine_driver_position->compute( _trajectory_desired.points[_point_counter].position[lookup->at(SPINE)] );
+    ROS_INFO("position: current:%f  target:%f  output:%f", current_position, _trajectory_desired.points[_point_counter].position[lookup->at(SPINE)], output_position_control );
+    
+    _spine_driver_velocity->applyOutput( (output_velocity_control * _velocity_influence) + (output_position_control * _position_influence) );
     
     ros::spinOnce();
     duration_between_points.sleep();
   }    
   
-  delete _spine_driver_position;  
-  delete _spine_driver_velocity;
-  delete lookup;
   return 0;
 }

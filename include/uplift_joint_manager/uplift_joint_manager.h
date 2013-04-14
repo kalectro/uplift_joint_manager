@@ -73,19 +73,22 @@ std::vector<std::string> _joint_names;
 
 float _target = 0;
 bool _spine_disabled = false;
-JointDriver* _arm_driver_position;
-JointDriver* _arm_driver_velocity;
+shared_ptr<JointDriver> _arm_driver_position;
+shared_ptr<JointDriver> _arm_driver_velocity;
 uint8_t _arm_encoder_id;
-JointDriver* _spine_driver_position;
-JointDriver* _spine_driver_velocity;
+shared_ptr<JointDriver> _spine_driver_position;
+shared_ptr<JointDriver> _spine_driver_velocity;
 uint8_t _spine_encoder_id;
 trajectory_msgs::JointTrajectory _trajectory_desired;
+double _position_influence = 0.5;
+double _velocity_influence = 0.5;
 
 // maps joint names in message to known joints
-std::vector<int>* lookup;
+shared_ptr<std::vector<int>> lookup;
 
 int32_t _point_counter = -1;
 
+enum joints = { SPINE, ARM }
 /**
  * \brief Joint manager for the uplift
  *
