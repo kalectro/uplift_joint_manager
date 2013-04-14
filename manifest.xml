@@ -1,0 +1,17 @@
+<package>
+  <description brief="uplift_joint_manager">
+
+     uplift_joint_manager
+
+  </description>
+  <author>Kai Franke</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/uplift</url>
+  <depend package="joint_driver"/>
+  <depend package="moveuplift"/>
+  <depend package="dynamic_reconfigure"/>
+
+</package>
+
+
