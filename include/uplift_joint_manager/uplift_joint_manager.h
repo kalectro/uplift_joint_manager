@@ -40,6 +40,7 @@
 #define UPLIFT_JOINT_MANAGER_H_
 
 #include <ros/ros.h>
+#include <boost/shared_ptr.hpp>
 
 #include <dynamic_reconfigure/server.h>
 #include <joint_driver/joint_driver.h>
@@ -48,47 +49,61 @@
 #include <sensor_msgs/JointState.h>
 #include <std_msgs/Float64.h>
 #include <moveit_msgs/MoveGroupActionResult.h>
-#include <uplift_joint_manager/SpineConfig.h>
+#include <uplift_joint_manager/JointConfig.h>
+#include <std_msgs/Float64.h>
 
 // general defines
 #define CREATE_NEW_ENCODER 255
+#define ARDUINO_ARRIVED 0
 
 // defines for spine
 #define SPINE_PWM_PIN 6
 #define SPINE_PWM_FREQUENCY 490
-#define SPINE_DIRECTION_CONTROL1_PIN 9
-#define SPINE_DIRECTION_CONTROL2_PIN 8
+#define SPINE_DIRECTION_CONTROL1_PIN 8
+#define SPINE_DIRECTION_CONTROL2_PIN 9
 #define SPINE_ENCODER1_PIN 4
 #define SPINE_ENCODER2_PIN 3
-#define SPINE_ENCODER_MARKS_ON_STROKE 100000 //TODO: find correct number
+#define SPINE_ENCODER_MARKS_ON_STROKE 20000 //TODO: find correct number
 #define SPINE_LENGTH 0.4 // TODO: find out correct length
 
 // defines for arm
 #define ARM_PWM_PIN 5
 #define ARM_PWM_FREQUENCY 490
 #define ARM_DIRECTION_CONTROL1_PIN 2
-#define ARM_DIRECTION_CONTROL2_PIN 7
+#define ARM_DIRECTION_CONTROL2_PIN 6
+#define IMU_CHAIN_ID 1
 
-std::vector<std::string> _joint_names;
+#define JointPtr boost::shared_ptr< JointDriver >
+#define TrajectoryMsg trajectory_msgs::JointTrajectory
 
-float _target = 0;
-bool _spine_disabled = false;
-shared_ptr<JointDriver> _arm_driver_position;
-shared_ptr<JointDriver> _arm_driver_velocity;
-uint8_t _arm_encoder_id;
-shared_ptr<JointDriver> _spine_driver_position;
-shared_ptr<JointDriver> _spine_driver_velocity;
-uint8_t _spine_encoder_id;
-trajectory_msgs::JointTrajectory _trajectory_desired;
-double _position_influence = 0.5;
-double _velocity_influence = 0.5;
+#define IMU 1 // defines which IMU in the chain to use
+//TODO: buy a longer cable so there is no need to attach a chain of IMUs
+
+using namespace bosch_drivers_common;
+
+std::vector<std::string> joint_names_;
+
+float target_ = 0;
+bool arm_disabled_ = false;
+bool spine_disabled_ = false;
+JointPtr arm_driver_position_;
+JointPtr arm_driver_velocity_;
+uint8_t arm_encoder_id_;
+JointPtr spine_driver_position_;
+JointPtr spine_driver_velocity_;
+uint8_t spine_encoder_id_;
+boost::shared_ptr< TrajectoryMsg > trajectory_desired_;
+double position_influence_ = 0.5;
+double velocity_influence_ = 0.5;
+ros::Time start_time_trajectory_;
+double roll_, pitch_, yaw_;
 
 // maps joint names in message to known joints
-shared_ptr<std::vector<int>> lookup;
+std::vector<int> lookup;
 
-int32_t _point_counter = -1;
+int32_t point_counter_ = -1;
 
-enum joints = { SPINE, ARM }
+enum { SPINE, ARM };
 /**
  * \brief Joint manager for the uplift
  *
@@ -99,7 +114,9 @@ enum joints = { SPINE, ARM }
 
 int main(int argc, char **argv);
 
-void callback( uplift_joint_manager::SpineConfig &config, uint32_t level );
+void arm_callback( uplift_joint_manager::JointConfig &config, uint32_t level );
+
+void spine_callback( uplift_joint_manager::JointConfig &config, uint32_t level );
 
 void trajectory_cb ( const moveit_msgs::MoveGroupActionResultConstPtr& desired );
 

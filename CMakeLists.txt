@@ -21,4 +21,4 @@ include(${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake)
 gencfg()
 
 rosbuild_add_executable(uplift_joint_manager src/uplift_joint_manager.cpp)
-target_link_libraries(uplift_joint_manager joint_driver)
+target_link_libraries(uplift_joint_manager joint_driver new_arduino_interface)
