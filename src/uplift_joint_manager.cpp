@@ -214,7 +214,15 @@ void trajectory_cb ( const moveit_msgs::MoveGroupActionResultConstPtr& desired )
   point_counter_ = 0;
   // specifies the time the trajectory was started
   start_time_trajectory_ = ros::Time::now();
+  
+  // set the time when the gripper is supposed to open or close
+  gripper_action_time_ = start_time_trajectory_
+                         // last trajectory time stamp
+                       + trajectory_desired_->points[trajectory_desired_->points.size() - 1].time_from_start
+                         // user selected offset TODO: get rid of define GRIPPER_TIME_DELAY
+                       + ros::Duration(0, GRIPPER_TIME_DELAY * 1e6);
 }
+
 
 int main(int argc, char **argv) 
 {
@@ -236,6 +244,8 @@ int main(int argc, char **argv)
   
   double current_position[joint_names_.size()], current_velocity[joint_names_.size()];
   
+  uint32_t force_counter = 0;
+  
   sensor_msgs::JointState robot_state;
   robot_state.name.resize(2);
   robot_state.position.resize(2);
@@ -254,6 +264,10 @@ int main(int argc, char **argv)
   // create lookup table with the same size as the number of joints 
   lookup.resize( joint_names_.size() );
 
+
+  //
+  //  Create joint drivers for Spine
+  //
   if( ARDUINO_ARRIVED )
   {  
     NewArduinoInterface Arduino_Spine( hw_id_spine );
@@ -286,7 +300,11 @@ int main(int argc, char **argv)
 	  // invert encoder values
 	  spine_driver_velocity_->encoder_->invertOutput();
 	}
+
 	
+	//
+  // create joint drivers for arm
+	//
 	NewArduinoInterface Arduino_Arm( hw_id_arm );
   if( Arduino_Arm.initialize() == false)
   {
@@ -299,8 +317,8 @@ int main(int argc, char **argv)
             ARM_PWM_PIN, ARM_PWM_FREQUENCY, ARM_DIRECTION_CONTROL1_PIN, ARM_DIRECTION_CONTROL2_PIN,   // Motor pins and settings
             IMU_CHAIN_ID,                                                                             // IMU settings
             JointDriver::POSITION)); 	                                                                // Joint control mode
-    // initalize joint and connected hardware
-    arm_driver_position_->initialize(); 
+  // initalize joint and connected hardware
+  arm_driver_position_->initialize(); 
     
   // create joint driver for velocity control for the arm
   arm_driver_velocity_.reset( new JointDriver(
@@ -308,10 +326,24 @@ int main(int argc, char **argv)
             ARM_PWM_PIN, ARM_PWM_FREQUENCY, ARM_DIRECTION_CONTROL1_PIN, ARM_DIRECTION_CONTROL2_PIN,   // Motor pins and settings
             IMU_CHAIN_ID,                                                                             // IMU settings
             JointDriver::VELOCITY)); 	                                                                // Joint control mode
-	  // initalize joint and connected hardware
-	  // arm_driver_velocity_->initialize();  // not neccessay because IMU was already initialized
+  // initalize joint and connected hardware
+  // arm_driver_velocity_->initialize();  // not neccessay because IMU was already initialized
 	  
 	  
+  //
+  // create joint driver for gripper
+  //
+  gripper_driver_position_.reset( new JointDriver(
+            &Arduino_Arm,                                                                                           // hardware interface
+            GRIPPER_PWM_PIN, GRIPPER_PWM_FREQUENCY, GRIPPER_DIRECTION_CONTROL1_PIN, GRIPPER_DIRECTION_CONTROL2_PIN, // Motor pins and settings
+            GRIPPER_ADC_PIN, ADC_REFERENCE_VOLTAGE, GRIPPER_LENGTH,                                                 // ADC settings
+            JointDriver::POSITION)); 	                                                                              // Joint control mode
+  //initialize joint and connected hardware
+  gripper_driver_position_->initialize();
+  gripper_driver_position_->pid->setParams(500,0,0,0);
+  
+  
+  
 	ros::Subscriber sub = nh.subscribe ("/move_group/result", 1, trajectory_cb);
 	ros::Publisher pub = nh.advertise<sensor_msgs::JointState> ("/joint_states", 1);
 
@@ -355,14 +387,41 @@ int main(int argc, char **argv)
       loop_rate_Hz.sleep();
       continue;
     }
-    if( (uint32_t)point_counter_ < trajectory_desired_->points.size() - 1)
+    
+    // if trajectory completed, keep trying to reach the last state
+    if( (size_t)point_counter_ < trajectory_desired_->points.size() - 1)
     {
-      if( now > start_time_trajectory_ + trajectory_desired_->points[point_counter_].time_from_start )
+      ros::Time target_time = start_time_trajectory_ + trajectory_desired_->points[point_counter_].time_from_start;
+      ROS_DEBUG("point_counter %i  trajectory size %lu  now %u  target_time %u", point_counter_, trajectory_desired_->points.size(), now.toNSec(), (start_time_trajectory_ + trajectory_desired_->points[point_counter_].time_from_start).toNSec() );
+      while( ( now > target_time )  && ( (size_t)point_counter_ < trajectory_desired_->points.size() - 1) )
       {
-        point_counter_++;
+        ++point_counter_;
+        target_time = start_time_trajectory_ + trajectory_desired_->points[point_counter_].time_from_start;
       }
     }
     
+    
+    // check if gripper is supposed to open or close
+    if( now > gripper_action_time_ )
+    {
+      if( pickup )
+      {
+        gripper_target_ = GRIPPER_CLOSE;
+        ROS_INFO("Closing gripper");
+      }
+      else
+      {
+        gripper_target_ = GRIPPER_OPEN;
+        ROS_INFO("Opening gripper");
+      }
+      pickup = !pickup;
+      reached_gripper_limit_ = false;
+      successful_grab_ = false;
+      force_counter = 0;
+      // set action time to infinity
+      gripper_action_time_ = ros::Time((uint32_t)ULONG_MAX, 0);
+    }
+
     
     //
     // measure current angles, positions and velocities of the robot and publish robot state
@@ -429,6 +488,65 @@ int main(int argc, char **argv)
     
     // weigh position and velocity output and apply
     arm_driver_velocity_->applyOutput( (output_velocity_control * velocity_influence_) + (output_position_control * position_influence_) );
+    
+    
+    //
+    //  Gripper control
+    //
+    double gripper_position = gripper_driver_position_->getState( );
+    double gripper_delta = gripper_last_position_ - gripper_position;
+    double gripper_control  = gripper_driver_position_->compute( gripper_position, gripper_target_ );
+    gripper_last_position_ = gripper_position;
+    
+    // check if endpoint has been reached
+    if( !pickup )  // gripper's target is CLOSE
+    {
+      if( gripper_position > GRIPPER_CLOSE - GRIPPER_DELTA )
+      {
+        ROS_DEBUG("gripper closed");
+        reached_gripper_limit_ = true;
+        successful_grab_ = false;
+        gripper_driver_position_->applyOutput(0.0);
+      }
+    }
+    else  // gripper's target is open
+    {
+      if( gripper_position < GRIPPER_OPEN + GRIPPER_DELTA )
+      {
+        ROS_DEBUG("gripper open");
+        reached_gripper_limit_ = true;
+        successful_grab_ = false;
+        gripper_driver_position_->applyOutput(0.0);
+      }
+    }
+    
+    // check if maximum motor torque is used but motor does not move -> object grabbed
+    if( gripper_control >= 1.0 && !pickup)
+    {
+      if( (-1) * gripper_delta < GRIPPER_DELTA )
+      {
+        ROS_DEBUG("gripper delta %f", gripper_delta);
+        if( ++force_counter > GRIPPER_FORCE_LIMIT )
+        {
+          ROS_DEBUG("gripper limit reached");
+          reached_gripper_limit_ = true;
+          gripper_driver_position_->applyOutput(0.0);
+          successful_grab_ = true;
+        }
+      }
+      else
+      {
+        force_counter = 0;
+      }
+    }
+    
+    // apply new PWM duty cycle
+    if( !reached_gripper_limit_ )
+    {
+       gripper_driver_position_->applyOutput( gripper_control );
+       ROS_DEBUG("gripper target: %f   real: %f", gripper_target_, gripper_position);
+    }
+    
     
     // publish feedback information
     std_msgs::Float64 temp;

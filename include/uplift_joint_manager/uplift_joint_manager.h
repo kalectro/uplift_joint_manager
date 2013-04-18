@@ -73,6 +73,20 @@
 #define ARM_DIRECTION_CONTROL2_PIN 6
 #define IMU_CHAIN_ID 1
 
+// defines for gripper
+#define GRIPPER_PWM_PIN 9
+#define GRIPPER_PWM_FREQUENCY 490
+#define GRIPPER_DIRECTION_CONTROL1_PIN 8
+#define GRIPPER_DIRECTION_CONTROL2_PIN 7
+#define GRIPPER_ADC_PIN 0
+#define ADC_REFERENCE_VOLTAGE 5000  // 5000mV = 5V = supply voltage
+#define GRIPPER_LENGTH 0.02 // 20mm stroke length
+#define GRIPPER_CLOSE  0.018 // 18mm from zero position
+#define GRIPPER_OPEN  0.002 // 2mm from zero position
+#define GRIPPER_DELTA 0.0003
+#define GRIPPER_FORCE_LIMIT 5
+#define GRIPPER_TIME_DELAY 1000
+
 #define JointPtr boost::shared_ptr< JointDriver >
 #define TrajectoryMsg trajectory_msgs::JointTrajectory
 
@@ -97,6 +111,13 @@ double position_influence_ = 0.5;
 double velocity_influence_ = 0.5;
 ros::Time start_time_trajectory_;
 double roll_, pitch_, yaw_;
+JointPtr gripper_driver_position_;
+bool pickup = false; // determines the current state of the gripper
+double gripper_target_ = GRIPPER_OPEN;  // set gripper to open
+bool successful_grab_ = false;
+bool reached_gripper_limit_ = false;
+double gripper_last_position_ = -1.0;  // make sure this position cannot be the initial state
+ros::Time gripper_action_time_((uint32_t)ULONG_MAX, 0);
 
 // maps joint names in message to known joints
 std::vector<int> lookup;
