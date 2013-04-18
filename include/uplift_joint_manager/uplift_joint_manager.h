@@ -117,7 +117,7 @@ double gripper_target_ = GRIPPER_OPEN;  // set gripper to open
 bool successful_grab_ = false;
 bool reached_gripper_limit_ = false;
 double gripper_last_position_ = -1.0;  // make sure this position cannot be the initial state
-ros::Time gripper_action_time_((uint32_t)ULONG_MAX, 0);
+ros::Time gripper_action_time_(0, 0); // make sure gripper is moved in the beginning
 
 // maps joint names in message to known joints
 std::vector<int> lookup;
