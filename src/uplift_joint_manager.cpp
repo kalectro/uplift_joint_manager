@@ -388,14 +388,17 @@ int main(int argc, char **argv)
       continue;
     }
     
-    // if trajectory completed, keep trying to reach the last state
+    // check if trajectory is not completed yet
     if( (size_t)point_counter_ < trajectory_desired_->points.size() - 1)
     {
+      // read time stamp of current trajectory point
       ros::Time target_time = start_time_trajectory_ + trajectory_desired_->points[point_counter_].time_from_start;
-      ROS_DEBUG("point_counter %i  trajectory size %lu  now %u  target_time %u", point_counter_, trajectory_desired_->points.size(), now.toNSec(), (start_time_trajectory_ + trajectory_desired_->points[point_counter_].time_from_start).toNSec() );
+      // find next trajectory point which has a time stamp not in the past
+      // also make sure to not increase the counter above the trajectroy size
       while( ( now > target_time )  && ( (size_t)point_counter_ < trajectory_desired_->points.size() - 1) )
       {
         ++point_counter_;
+        // set target time to new trajectory point time stamp
         target_time = start_time_trajectory_ + trajectory_desired_->points[point_counter_].time_from_start;
       }
     }

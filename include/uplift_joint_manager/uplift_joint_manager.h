@@ -85,7 +85,7 @@
 #define GRIPPER_OPEN  0.002 // 2mm from zero position
 #define GRIPPER_DELTA 0.0003
 #define GRIPPER_FORCE_LIMIT 5
-#define GRIPPER_TIME_DELAY 1000
+#define GRIPPER_TIME_DELAY 2000
 
 #define JointPtr boost::shared_ptr< JointDriver >
 #define TrajectoryMsg trajectory_msgs::JointTrajectory
@@ -107,8 +107,8 @@ JointPtr spine_driver_position_;
 JointPtr spine_driver_velocity_;
 uint8_t spine_encoder_id_;
 boost::shared_ptr< TrajectoryMsg > trajectory_desired_;
-double position_influence_ = 0.5;
-double velocity_influence_ = 0.5;
+double position_influence_ = 0.9;
+double velocity_influence_ = 0.1;
 ros::Time start_time_trajectory_;
 double roll_, pitch_, yaw_;
 JointPtr gripper_driver_position_;
