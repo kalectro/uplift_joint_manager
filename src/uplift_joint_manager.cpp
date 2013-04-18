@@ -237,18 +237,18 @@ int main(int argc, char **argv)
   double current_position[joint_names_.size()], current_velocity[joint_names_.size()];
   
   sensor_msgs::JointState robot_state;
-  robot_state.name.resize(4);
-  robot_state.position.resize(4);
-  robot_state.velocity.resize(4);
+  robot_state.name.resize(2);
+  robot_state.position.resize(2);
+  robot_state.velocity.resize(2);
   robot_state.name[SPINE] ="spine";
   robot_state.name[ARM] ="arm";
-  robot_state.name[2] ="single_finger";
-  robot_state.name[3] ="double_finger";
+  //robot_state.name[2] ="single_finger";
+  //robot_state.name[3] ="double_finger";
   
-  robot_state.position[2] = 0.0;
-  robot_state.velocity[2] = 0.0;
-  robot_state.position[3] = 0.0;
-  robot_state.velocity[3] = 0.0;
+  //robot_state.position[2] = 0.0;
+  //robot_state.velocity[2] = 0.0;
+  //robot_state.position[3] = 0.0;
+  //robot_state.velocity[3] = 0.0;
   
   
   // create lookup table with the same size as the number of joints 
@@ -417,12 +417,12 @@ int main(int argc, char **argv)
     // ARM control
     // extract trajectory target information and apply new control to arm motor
     //
-    double target_velocity = trajectory_desired_->points[point_counter_].velocities[lookup[ARM]];
+    double target_velocity = (-1.0) * trajectory_desired_->points[point_counter_].velocities[lookup[ARM]];  // adjust rotation direction
     double output_velocity_control = arm_driver_velocity_->compute( current_velocity[ARM], target_velocity ); 
                   
     ROS_DEBUG("arm velocity: current:%f  target:%f  output:%f", current_velocity[ARM], target_velocity, output_velocity_control );
     
-    double target_position = trajectory_desired_->points[point_counter_].positions[lookup[ARM]];
+    double target_position = (-1.0) * trajectory_desired_->points[point_counter_].positions[lookup[ARM]];  // adjust rotation direction
     double output_position_control = arm_driver_position_->compute( current_position[ARM], target_position );
     
     ROS_DEBUG("arm position: current:%f  target:%f  output:%f", current_position[ARM], target_position, output_position_control );

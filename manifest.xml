@@ -12,7 +12,6 @@
   <depend package="moveuplift"/>
   <depend package="dynamic_reconfigure"/>
   <depend package="bosch_imu_driver"/>
-  <depend package="bullet"/>
   <depend package="new_arduino_interface"/>
 
 </package>
