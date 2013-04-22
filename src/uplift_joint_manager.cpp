@@ -50,7 +50,7 @@ void spine_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
     {
       case 0: 
       {
-        spine_driver_position_->pid->getParams( p, i, d, max_integral );
+        spine_driver_position_->getPidPtr()->getParams( p, i, d, max_integral );
         config.p_gain = p;
         config.i_gain = i;
         config.d_gain = d;
@@ -59,7 +59,7 @@ void spine_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
       
       case 1:
       {
-        spine_driver_velocity_->pid->getParams( p, i, d, max_integral );
+        spine_driver_velocity_->getPidPtr()->getParams( p, i, d, max_integral );
         config.p_gain = p;
         config.i_gain = i;
         config.d_gain = d;
@@ -86,12 +86,12 @@ void spine_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
   {
     case JointDriver::POSITION: 
     {
-      spine_driver_position_->pid->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
+      spine_driver_position_->getPidPtr()->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
     }break;
     
     case JointDriver::VELOCITY:
     {
-      spine_driver_velocity_->pid->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
+      spine_driver_velocity_->getPidPtr()->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
     }break;
   }
   
@@ -124,7 +124,7 @@ void arm_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
     {
       case 0: 
       {
-        arm_driver_position_->pid->getParams( p, i, d, max_integral );
+        arm_driver_position_->getPidPtr()->getParams( p, i, d, max_integral );
         config.p_gain = p;
         config.i_gain = i;
         config.d_gain = d;
@@ -133,7 +133,7 @@ void arm_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
       
       case 1:
       {
-        arm_driver_velocity_->pid->getParams( p, i, d, max_integral );
+        arm_driver_velocity_->getPidPtr()->getParams( p, i, d, max_integral );
         config.p_gain = p;
         config.i_gain = i;
         config.d_gain = d;
@@ -160,12 +160,12 @@ void arm_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
   {
     case JointDriver::POSITION: 
     {
-      arm_driver_position_->pid->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
+      arm_driver_position_->getPidPtr()->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
     }break;
     
     case JointDriver::VELOCITY:
     {
-      arm_driver_velocity_->pid->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
+      arm_driver_velocity_->getPidPtr()->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
     }break;
   }
   
@@ -285,9 +285,9 @@ int main(int argc, char **argv)
     // initalize joint and connected hardware
     spine_driver_position_->initialize(); 
     // invert encoder values
-    spine_driver_position_->encoder_->invertOutput();
+    spine_driver_position_->getEncoderPtr()->invertOutput();
     // retrieve encoder id to use in next joint driver
-    spine_encoder_id_ = spine_driver_position_->getEncoderID();
+    spine_encoder_id_ = spine_driver_position_->getEncoderPtr()->getEncoderID();
     
     // creat joint driver for velocity control for the spine
 	  spine_driver_velocity_.reset( new JointDriver( 
@@ -298,7 +298,7 @@ int main(int argc, char **argv)
 	  // initalize joint and connected hardware
 	  spine_driver_velocity_->initialize();
 	  // invert encoder values
-	  spine_driver_velocity_->encoder_->invertOutput();
+	  spine_driver_velocity_->getEncoderPtr()->invertOutput();
 	}
 
 	
@@ -340,7 +340,7 @@ int main(int argc, char **argv)
             JointDriver::POSITION)); 	                                                                              // Joint control mode
   //initialize joint and connected hardware
   gripper_driver_position_->initialize();
-  gripper_driver_position_->pid->setParams(500,0,0,0);
+  gripper_driver_position_->getPidPtr()->setParams(500,0,0,0);
   
   
   
