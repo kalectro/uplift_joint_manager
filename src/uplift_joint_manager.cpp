@@ -42,6 +42,8 @@ void spine_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
 { 
   static int32_t control_mode_ = 0;
   
+  calibrate_height_ = config.calibrate_height;
+  
   if ( config.control_mode != control_mode_ )
   {
     double p, i, d, max_integral;
@@ -186,8 +188,26 @@ void arm_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
   ROS_INFO("New control parameters set to  P_gain:%f I_gain:%f D_gain:%f", config.p_gain, config.i_gain, config.d_gain);
 }
 
+void heigth_cb( const std_msgs::Float32ConstPtr& height )
+{
+  if( calibrate_height_ )
+  {
+    height_camera_ = (-1.0) * height->data;
+    double temp = (height_camera_ - SPINE_MIN_HEIGHT) / (SPINE_LENGTH) * SPINE_ENCODER_MARKS_ON_STROKE;
+    uint32_t initial_encoder_ticks = (uint32_t) temp;
+    ROS_INFO("camera calibrated at %fm, spine height set to %u encoder ticks", height_camera_, initial_encoder_ticks);
+    spine_driver_position_->getEncoderPtr()->setPosition(initial_encoder_ticks);
+  }
+}
+
+
 void trajectory_cb ( const moveit_msgs::MoveGroupActionResultConstPtr& desired )
 {
+  if( desired->status.status != 3 ) // trajectory execution not complete
+  {
+    ROS_WARN("Motion plan was not computed successfully and will therefore not be executed. Code %i", desired->status.status);
+    return;
+  }
   ROS_INFO("new trajectory received");
   // copy message
   trajectory_desired_.reset( new TrajectoryMsg( desired->result.planned_trajectory.joint_trajectory ) );
@@ -246,6 +266,8 @@ int main(int argc, char **argv)
   
   uint32_t force_counter = 0;
   
+  height_camera_ = 0.0;
+  
   sensor_msgs::JointState robot_state;
   robot_state.name.resize(2);
   robot_state.position.resize(2);
@@ -268,38 +290,35 @@ int main(int argc, char **argv)
   //
   //  Create joint drivers for Spine
   //
-  if( ARDUINO_ARRIVED )
-  {  
-    NewArduinoInterface Arduino_Spine( hw_id_spine );
-    if( Arduino_Spine.initialize() == false)
-    {
-      ROS_ERROR("Error initializing Arduino_Spine");
-    }  
+  NewArduinoInterface Arduino_Spine( hw_id_spine );
+  if( Arduino_Spine.initialize() == false)
+  {
+    ROS_ERROR("Error initializing Arduino_Spine");
+  }  
 
-    // create joint driver for position control for the spine
-	  spine_driver_position_.reset( new JointDriver(
-            &Arduino_Spine,                                                                                           // hardware interface
-            SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,           // Motor pins and settings
-            SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, CREATE_NEW_ENCODER, SPINE_LENGTH,  // Encoder pins and settings
-            JointDriver::POSITION)); 	                                                                                // Joint control mode
-    // initalize joint and connected hardware
-    spine_driver_position_->initialize(); 
-    // invert encoder values
-    spine_driver_position_->getEncoderPtr()->invertOutput();
-    // retrieve encoder id to use in next joint driver
-    spine_encoder_id_ = spine_driver_position_->getEncoderPtr()->getEncoderID();
-    
-    // creat joint driver for velocity control for the spine
-	  spine_driver_velocity_.reset( new JointDriver( 
-            &Arduino_Spine,                                                                                           // hardware interface
-            SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,           // Motor pins and settings
-            SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, spine_encoder_id_, SPINE_LENGTH,   // Encoder pins and settings
-            JointDriver::VELOCITY)); 	                                                                                // Joint control mode
-	  // initalize joint and connected hardware
-	  spine_driver_velocity_->initialize();
-	  // invert encoder values
-	  spine_driver_velocity_->getEncoderPtr()->invertOutput();
-	}
+  // create joint driver for position control for the spine
+  spine_driver_position_.reset( new JointDriver(
+          &Arduino_Spine,                                                                                           // hardware interface
+          SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,           // Motor pins and settings
+          SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, CREATE_NEW_ENCODER, SPINE_LENGTH,  // Encoder pins and settings
+          JointDriver::POSITION)); 	                                                                                // Joint control mode
+  // initalize joint and connected hardware
+  spine_driver_position_->initialize(); 
+  // invert encoder values
+  // spine_driver_position_->getEncoderPtr()->invertOutput();
+  // retrieve encoder id to use in next joint driver
+  spine_encoder_id_ = spine_driver_position_->getEncoderPtr()->getEncoderID();
+  
+  // creat joint driver for velocity control for the spine
+  spine_driver_velocity_.reset( new JointDriver( 
+          &Arduino_Spine,                                                                                           // hardware interface
+          SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,           // Motor pins and settings
+          SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, spine_encoder_id_, SPINE_LENGTH,   // Encoder pins and settings
+          JointDriver::VELOCITY)); 	                                                                                // Joint control mode
+  // initalize joint and connected hardware
+  spine_driver_velocity_->initialize();
+  // invert encoder values
+  // spine_driver_velocity_->getEncoderPtr()->invertOutput();
 
 	
 	//
@@ -327,7 +346,7 @@ int main(int argc, char **argv)
             IMU_CHAIN_ID,                                                                             // IMU settings
             JointDriver::VELOCITY)); 	                                                                // Joint control mode
   // initalize joint and connected hardware
-  // arm_driver_velocity_->initialize();  // not neccessay because IMU was already initialized
+  arm_driver_velocity_->initialize(); 
 	  
 	  
   //
@@ -344,7 +363,9 @@ int main(int argc, char **argv)
   
   
   
-	ros::Subscriber sub = nh.subscribe ("/move_group/result", 1, trajectory_cb);
+	ros::Subscriber sub = nh.subscribe( "/move_group/result", 1, trajectory_cb);
+	ros::Subscriber sub_height = nh.subscribe( "/height_detector/height", 1, heigth_cb );
+	
 	ros::Publisher pub = nh.advertise<sensor_msgs::JointState> ("/joint_states", 1);
 
   ros::Publisher pub_position_target_spine = nh_feedback.advertise<std_msgs::Float64> ("feedback/spine/position/target", 5);
@@ -356,13 +377,10 @@ int main(int argc, char **argv)
 	//
 	// dynamic reconfigure settings
 	//
-	if( ARDUINO_ARRIVED )
-	{
-	  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig> server_spine;
-	  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig>::CallbackType spine_config;
-	  spine_config = boost::bind(&spine_cb, _1, _2);
-    server_spine.setCallback(spine_config);
-  }
+  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig> server_spine;
+  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig>::CallbackType spine_config;
+  spine_config = boost::bind(&spine_cb, _1, _2);
+  server_spine.setCallback(spine_config);
   
 	dynamic_reconfigure::Server<uplift_joint_manager::JointConfig> server_arm;
   dynamic_reconfigure::Server<uplift_joint_manager::JointConfig>::CallbackType arm_config;
@@ -374,10 +392,34 @@ int main(int argc, char **argv)
   ros::Rate loop_rate_Hz(100);
   ros::Duration duration_between_points;
 
+
+  // set camera height to a random value to make it work without calibration
+  height_camera_ = 0.7;
+  
+  
+    
   while ( ros::ok() )
   {
     // record time of measurements
     ros::Time now = ros::Time::now();
+    
+    //
+    // measure current angles, positions and velocities of the robot and publish robot state
+    //
+    current_velocity[SPINE] = spine_driver_velocity_->getState();
+    current_position[SPINE] = spine_driver_position_->getState();
+    robot_state.position[SPINE] = current_position[SPINE];
+    robot_state.velocity[SPINE] = current_velocity[SPINE];
+
+    current_velocity[ARM] = arm_driver_velocity_->getState();
+    current_position[ARM] = arm_driver_position_->getState();
+    robot_state.position[ARM] = (-1) * current_position[ARM];
+    robot_state.velocity[ARM] = (-1) * current_velocity[ARM];
+    
+    robot_state.header.stamp = now;
+    
+    pub.publish( robot_state );
+    
     
     // check if any trajectory has been received yet (point_counter_ is initialized with -1)
     if( point_counter_ < 0 )
@@ -427,70 +469,46 @@ int main(int argc, char **argv)
 
     
     //
-    // measure current angles, positions and velocities of the robot and publish robot state
-    //
-    if( ARDUINO_ARRIVED )
-	  {
-      current_velocity[SPINE] = spine_driver_velocity_->getState();
-      current_position[SPINE] = spine_driver_position_->getState();
-      robot_state.position[SPINE] = current_position[SPINE];
-      robot_state.velocity[SPINE] = current_velocity[SPINE];
-    }
-
-    current_velocity[ARM] = arm_driver_velocity_->getState();
-    current_position[ARM] = arm_driver_position_->getState();
-    robot_state.position[ARM] = current_position[ARM];
-    robot_state.velocity[ARM] = current_velocity[ARM];
-    
-    robot_state.header.stamp = now;
-    
-    pub.publish( robot_state );
-    
-
-    //
     // SPINE control
     // extract trajectory target information and apply new control to spine motor
     //    
-    if( ARDUINO_ARRIVED )
-	  {
-      double target_velocity = trajectory_desired_->points[point_counter_].velocities[lookup[SPINE]];
-      double output_velocity_control = spine_driver_velocity_->compute( current_velocity[SPINE], target_velocity ); 
-                    
-      ROS_DEBUG("spine velocity: current:%f  target:%f  output:%f", current_velocity[SPINE], target_velocity, output_velocity_control );
-      
-      double target_position = trajectory_desired_->points[point_counter_].positions[lookup[SPINE]];
-      double output_position_control = spine_driver_position_->compute( current_position[SPINE], target_position );
-      
-      ROS_DEBUG("spine position: current:%f  target:%f  output:%f", current_position[SPINE], target_position, output_position_control );
-      
-      // weigh position and velocity output and apply
-      spine_driver_velocity_->applyOutput( (output_velocity_control * velocity_influence_) + (output_position_control * position_influence_) );
-      
-      // publish feedback information
-      std_msgs::Float64 temp;
-      temp.data = target_position;
-      pub_position_target_spine.publish( temp );
-      temp.data = target_velocity;
-      pub_velocity_target_spine.publish( temp );
-    }
+    double target_velocity_spine = trajectory_desired_->points[point_counter_].velocities[lookup[SPINE]];
+    double output_velocity_control_spine = spine_driver_velocity_->compute( current_velocity[SPINE], target_velocity_spine ); 
+                  
+    ROS_DEBUG("spine velocity: current:%f  target:%f  output:%f", current_velocity[SPINE], target_velocity_spine, output_velocity_control_spine );
     
+    double target_position_spine = trajectory_desired_->points[point_counter_].positions[lookup[SPINE]];
+    double output_position_control_spine = spine_driver_position_->compute( current_position[SPINE], target_position_spine );
+    
+    ROS_DEBUG("spine position: current:%f  target:%f  output:%f", current_position[SPINE], target_position_spine, output_position_control_spine );
+    
+    // weigh position and velocity output and apply
+    spine_driver_velocity_->applyOutput( (output_velocity_control_spine * velocity_influence_) + (output_position_control_spine * position_influence_) );
+    
+    // publish feedback information
+    std_msgs::Float64 temp;
+    temp.data = target_position_spine;
+    pub_position_target_spine.publish( temp );
+    temp.data = target_velocity_spine;
+    pub_velocity_target_spine.publish( temp );
+
     
     //
     // ARM control
     // extract trajectory target information and apply new control to arm motor
     //
-    double target_velocity = (-1.0) * trajectory_desired_->points[point_counter_].velocities[lookup[ARM]];  // adjust rotation direction
-    double output_velocity_control = arm_driver_velocity_->compute( current_velocity[ARM], target_velocity ); 
+    double target_velocity_arm = (-1) * trajectory_desired_->points[point_counter_].velocities[lookup[ARM]];  // adjust rotation direction
+    double output_velocity_control_arm = arm_driver_velocity_->compute( current_velocity[ARM], target_velocity_arm ); 
                   
-    ROS_DEBUG("arm velocity: current:%f  target:%f  output:%f", current_velocity[ARM], target_velocity, output_velocity_control );
+    ROS_DEBUG("arm velocity: current:%f  target:%f  output:%f", current_velocity[ARM], target_velocity_arm, output_velocity_control_arm );
     
-    double target_position = (-1.0) * trajectory_desired_->points[point_counter_].positions[lookup[ARM]];  // adjust rotation direction
-    double output_position_control = arm_driver_position_->compute( current_position[ARM], target_position );
+    double target_position_arm = (-1) * trajectory_desired_->points[point_counter_].positions[lookup[ARM]];  // adjust rotation direction
+    double output_position_control_arm = arm_driver_position_->compute( current_position[ARM], target_position_arm );
     
-    ROS_DEBUG("arm position: current:%f  target:%f  output:%f", current_position[ARM], target_position, output_position_control );
+    ROS_DEBUG("arm position: current:%f  target:%f  output:%f", current_position[ARM], target_position_arm, output_position_control_arm );
     
     // weigh position and velocity output and apply
-    arm_driver_velocity_->applyOutput( (output_velocity_control * velocity_influence_) + (output_position_control * position_influence_) );
+    arm_driver_velocity_->applyOutput( (output_velocity_control_arm * velocity_influence_) + (output_position_control_arm * position_influence_) );
     
     
     //
@@ -552,11 +570,11 @@ int main(int argc, char **argv)
     
     
     // publish feedback information
-    std_msgs::Float64 temp;
-    temp.data = target_position;
-    pub_position_target_arm.publish( temp );
-    temp.data = target_velocity;
-    pub_velocity_target_arm.publish( temp );
+    std_msgs::Float64 temp_arm;
+    temp_arm.data = target_position_arm;
+    pub_position_target_arm.publish( temp_arm );
+    temp_arm.data = target_velocity_arm;
+    pub_velocity_target_arm.publish( temp_arm );
     
     ros::spinOnce();
     loop_rate_Hz.sleep();

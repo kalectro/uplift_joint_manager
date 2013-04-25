@@ -47,6 +47,7 @@
 #include <new_arduino_interface.hpp> 
 #include <trajectory_msgs/JointTrajectory.h>
 #include <sensor_msgs/JointState.h>
+#include <std_msgs/Float32.h>
 #include <std_msgs/Float64.h>
 #include <moveit_msgs/MoveGroupActionResult.h>
 #include <uplift_joint_manager/JointConfig.h>
@@ -54,17 +55,17 @@
 
 // general defines
 #define CREATE_NEW_ENCODER 255
-#define ARDUINO_ARRIVED 0
 
 // defines for spine
-#define SPINE_PWM_PIN 6
+#define SPINE_PWM_PIN 5
 #define SPINE_PWM_FREQUENCY 490
-#define SPINE_DIRECTION_CONTROL1_PIN 8
-#define SPINE_DIRECTION_CONTROL2_PIN 9
+#define SPINE_DIRECTION_CONTROL1_PIN 7
+#define SPINE_DIRECTION_CONTROL2_PIN 6
 #define SPINE_ENCODER1_PIN 4
 #define SPINE_ENCODER2_PIN 3
 #define SPINE_ENCODER_MARKS_ON_STROKE 20000 //TODO: find correct number
 #define SPINE_LENGTH 0.4 // TODO: find out correct length
+#define SPINE_MIN_HEIGHT 0.5
 
 // defines for arm
 #define ARM_PWM_PIN 5
@@ -111,9 +112,11 @@ double position_influence_ = 0.9;
 double velocity_influence_ = 0.1;
 ros::Time start_time_trajectory_;
 double roll_, pitch_, yaw_;
+float height_camera_;
+bool calibrate_height_ = true;
 JointPtr gripper_driver_position_;
 bool pickup = false; // determines the current state of the gripper
-double gripper_target_ = GRIPPER_OPEN;  // set gripper to open
+double gripper_target_ = GRIPPER_OPEN;  // initialize gripper to open
 bool successful_grab_ = false;
 bool reached_gripper_limit_ = false;
 double gripper_last_position_ = -1.0;  // make sure this position cannot be the initial state
@@ -128,17 +131,17 @@ enum { SPINE, ARM };
 /**
  * \brief Joint manager for the uplift
  *
- * This joint manager controls all available joints on the uplift robot. It will subscribe to the a planned
- * trajectory message and try to follow this trajectory using multiple instances of JointDriver to control
- * the position and the velocity of all joints
+ * This joint manager controls all available joints on the uplift robot. It will subscribe to the planned
+ * trajectory message by moveit and tries to follow this trajectory using multiple instances of JointDriver 
+ * to control the position and the velocity of all joints
  */
 
 int main(int argc, char **argv);
 
-void arm_callback( uplift_joint_manager::JointConfig &config, uint32_t level );
-
+void arm_callback  ( uplift_joint_manager::JointConfig &config, uint32_t level );
 void spine_callback( uplift_joint_manager::JointConfig &config, uint32_t level );
 
+void heigth_cb( const std_msgs::Float32ConstPtr& height );
 void trajectory_cb ( const moveit_msgs::MoveGroupActionResultConstPtr& desired );
 
 #endif // UPLIFT_JOINT_MANAGER_H_
