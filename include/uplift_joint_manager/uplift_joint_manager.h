@@ -51,7 +51,6 @@
 #include <std_msgs/Float64.h>
 #include <moveit_msgs/MoveGroupActionResult.h>
 #include <uplift_joint_manager/JointConfig.h>
-#include <std_msgs/Float64.h>
 
 // general defines
 #define CREATE_NEW_ENCODER 255
@@ -63,9 +62,10 @@
 #define SPINE_DIRECTION_CONTROL2_PIN 6
 #define SPINE_ENCODER1_PIN 4
 #define SPINE_ENCODER2_PIN 3
-#define SPINE_ENCODER_MARKS_ON_STROKE 20000 //TODO: find correct number
-#define SPINE_LENGTH 0.4 // TODO: find out correct length
-#define SPINE_MIN_HEIGHT 0.5
+#define SPINE_ENCODER_TICKS_ON_STROKE 192500
+#define SPINE_LENGTH 0.3
+#define SPINE_MIN_HEIGHT 0.7
+#define CAMERA_TO_SPINE 0.1
 
 // defines for arm
 #define ARM_PWM_PIN 5
@@ -108,11 +108,13 @@ JointPtr spine_driver_position_;
 JointPtr spine_driver_velocity_;
 uint8_t spine_encoder_id_;
 boost::shared_ptr< TrajectoryMsg > trajectory_desired_;
-double position_influence_ = 0.9;
-double velocity_influence_ = 0.1;
+double spine_position_influence_ = 0.9;
+double spine_velocity_influence_ = 0.1;
+double arm_position_influence_ = 0.9;
+double arm_velocity_influence_ = 0.1;
 ros::Time start_time_trajectory_;
 double roll_, pitch_, yaw_;
-float height_camera_;
+float height_spine_;
 bool calibrate_height_ = true;
 JointPtr gripper_driver_position_;
 bool pickup = false; // determines the current state of the gripper

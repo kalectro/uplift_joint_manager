@@ -38,169 +38,173 @@
 
 #include <uplift_joint_manager/uplift_joint_manager.h>
 
-void spine_cb( uplift_joint_manager::JointConfig &config, uint32_t level ) 
+
+//
+//  dynamic reconfigure callback function
+//
+void dynamic_cb( uplift_joint_manager::JointConfig &config, uint32_t level ) 
 { 
-  static int32_t control_mode_ = 0;
+  static int32_t arm_control_mode = 0;
+  static int32_t spine_control_mode = 0;
   
   calibrate_height_ = config.calibrate_height;
   
-  if ( config.control_mode != control_mode_ )
+  if ( config.spine_control_mode != spine_control_mode )
   {
     double p, i, d, max_integral;
-    control_mode_ = config.control_mode;
-    switch ( control_mode_ )
+    spine_control_mode = config.spine_control_mode;
+    switch ( spine_control_mode )
     {
       case 0: 
       {
         spine_driver_position_->getPidPtr()->getParams( p, i, d, max_integral );
-        config.p_gain = p;
-        config.i_gain = i;
-        config.d_gain = d;
-        config.max_integral = max_integral;
+        config.spine_p_gain = p;
+        config.spine_i_gain = i;
+        config.spine_d_gain = d;
+        config.spine_max_integral = max_integral;
       }break;
       
       case 1:
       {
         spine_driver_velocity_->getPidPtr()->getParams( p, i, d, max_integral );
-        config.p_gain = p;
-        config.i_gain = i;
-        config.d_gain = d;
-        config.max_integral = max_integral;
+        config.spine_p_gain = p;
+        config.spine_i_gain = i;
+        config.spine_d_gain = d;
+        config.spine_max_integral = max_integral;
+      }break;
+      
+      default: ROS_ERROR("bad joint control mode"); return;
+    }   
+  }
+  if ( config.arm_control_mode != arm_control_mode )
+  {
+    double p, i, d, max_integral;
+    arm_control_mode = config.arm_control_mode;
+    switch ( arm_control_mode )
+    {
+      case 0: 
+      {
+        arm_driver_position_->getPidPtr()->getParams( p, i, d, max_integral );
+        config.arm_p_gain = p;
+        config.arm_i_gain = i;
+        config.arm_d_gain = d;
+        config.arm_max_integral = max_integral;
+      }break;
+      
+      case 1:
+      {
+        arm_driver_velocity_->getPidPtr()->getParams( p, i, d, max_integral );
+        config.arm_p_gain = p;
+        config.arm_i_gain = i;
+        config.arm_d_gain = d;
+        config.arm_max_integral = max_integral;
       }break;
       
       default: ROS_ERROR("bad joint control mode"); return;
     }   
   }
   
-  // convert enums from cfg file into the in the h files
-  motor_drive_mode motor_mode = (motor_drive_mode)config.motor_mode;
   
-  switch ( motor_mode )
+  // convert enums from cfg file into the in the h files
+  motor_drive_mode spine_motor_mode = (motor_drive_mode)config.spine_motor_mode;
+  motor_drive_mode arm_motor_mode = (motor_drive_mode)config.arm_motor_mode;
+  
+  switch ( spine_motor_mode )
   {
     case DRIVE: spine_disabled_ = false; break;
     case FREE_RUNNING: spine_disabled_ = true; break;
     case BRAKE: spine_disabled_ = true; break;
     default: ROS_ERROR("bad motor mode");
   }
-  spine_driver_position_->setMode( motor_mode );
-
-  switch ( control_mode_ )
-  {
-    case JointDriver::POSITION: 
-    {
-      spine_driver_position_->getPidPtr()->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
-    }break;
-    
-    case JointDriver::VELOCITY:
-    {
-      spine_driver_velocity_->getPidPtr()->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
-    }break;
-  }
-  
-  // if influence has changed, adjust the other influence value
-  if ( config.position_influence > position_influence_ + 0.01 || config.position_influence < position_influence_ - 0.01 )
-  {
-    config.velocity_influence = 1.0 - config.position_influence;
-    position_influence_ = config.position_influence;
-    velocity_influence_ = config.velocity_influence;
-  }
-  if ( config.velocity_influence > velocity_influence_ + 0.01 || config.velocity_influence < velocity_influence_ - 0.01 )
-  {
-    config.position_influence = 1.0 - config.velocity_influence;
-    position_influence_ = config.position_influence;
-    velocity_influence_ = config.velocity_influence;
-  }
-  
-  ROS_INFO("New control parameters set to  P_gain:%f I_gain:%f D_gain:%f", config.p_gain, config.i_gain, config.d_gain);
-}
-
-void arm_cb( uplift_joint_manager::JointConfig &config, uint32_t level ) 
-{ 
-  static int32_t control_mode_ = 0;
-  
-  if ( config.control_mode != control_mode_ )
-  {
-    double p, i, d, max_integral;
-    control_mode_ = config.control_mode;
-    switch ( control_mode_ )
-    {
-      case 0: 
-      {
-        arm_driver_position_->getPidPtr()->getParams( p, i, d, max_integral );
-        config.p_gain = p;
-        config.i_gain = i;
-        config.d_gain = d;
-        config.max_integral = max_integral;
-      }break;
-      
-      case 1:
-      {
-        arm_driver_velocity_->getPidPtr()->getParams( p, i, d, max_integral );
-        config.p_gain = p;
-        config.i_gain = i;
-        config.d_gain = d;
-        config.max_integral = max_integral;
-      }break;
-      
-      default: ROS_ERROR("bad joint control mode"); return;
-    }   
-  }
-  
-  // convert enums from cfg file into the in the h files
-  motor_drive_mode motor_mode = (motor_drive_mode)config.motor_mode;
-  
-  switch ( motor_mode )
+  switch ( arm_motor_mode )
   {
     case DRIVE: arm_disabled_ = false; break;
     case FREE_RUNNING: arm_disabled_ = true; break;
     case BRAKE: arm_disabled_ = true; break;
     default: ROS_ERROR("bad motor mode");
   }
-  arm_driver_position_->setMode( motor_mode );
+  arm_driver_position_->setMode( arm_motor_mode );
+  spine_driver_position_->setMode( spine_motor_mode );
 
-  switch ( control_mode_ )
+
+  switch ( spine_control_mode )
   {
     case JointDriver::POSITION: 
     {
-      arm_driver_position_->getPidPtr()->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
+      spine_driver_position_->getPidPtr()->setParams( config.spine_p_gain, config.spine_i_gain, config.spine_d_gain, config.spine_max_integral );
     }break;
     
     case JointDriver::VELOCITY:
     {
-      arm_driver_velocity_->getPidPtr()->setParams( config.p_gain, config.i_gain, config.d_gain, config.max_integral );
+      spine_driver_velocity_->getPidPtr()->setParams( config.spine_p_gain, config.spine_i_gain, config.spine_d_gain, config.spine_max_integral );
+    }break;
+  }
+  switch ( arm_control_mode )
+  {
+    case JointDriver::POSITION: 
+    {
+      arm_driver_position_->getPidPtr()->setParams( config.arm_p_gain, config.arm_i_gain, config.arm_d_gain, config.arm_max_integral );
+    }break;
+    
+    case JointDriver::VELOCITY:
+    {
+      arm_driver_velocity_->getPidPtr()->setParams( config.arm_p_gain, config.arm_i_gain, config.arm_d_gain, config.arm_max_integral );
     }break;
   }
   
+  
   // if influence has changed, adjust the other influence value
-  if ( config.position_influence > position_influence_ + 0.01 || config.position_influence < position_influence_ - 0.01 )
+  if ( config.spine_position_influence > spine_position_influence_ + 0.01 || config.spine_position_influence < spine_position_influence_ - 0.01 )
   {
-    config.velocity_influence = 1.0 - config.position_influence;
-    position_influence_ = config.position_influence;
-    velocity_influence_ = config.velocity_influence;
+    config.spine_velocity_influence = 1.0 - config.spine_position_influence;
+    spine_position_influence_ = config.spine_position_influence;
+    spine_velocity_influence_ = config.spine_velocity_influence;
   }
-  if ( config.velocity_influence > velocity_influence_ + 0.01 || config.velocity_influence < velocity_influence_ - 0.01 )
+  if ( config.arm_position_influence > arm_position_influence_ + 0.01 || config.arm_position_influence < arm_position_influence_ - 0.01 )
   {
-    config.position_influence = 1.0 - config.velocity_influence;
-    position_influence_ = config.position_influence;
-    velocity_influence_ = config.velocity_influence;
+    config.arm_velocity_influence = 1.0 - config.arm_position_influence;
+    arm_position_influence_ = config.arm_position_influence;
+    arm_velocity_influence_ = config.arm_velocity_influence;
   }
   
-  ROS_INFO("New control parameters set to  P_gain:%f I_gain:%f D_gain:%f", config.p_gain, config.i_gain, config.d_gain);
+  if ( config.spine_velocity_influence > spine_velocity_influence_ + 0.01 || config.spine_velocity_influence < spine_velocity_influence_ - 0.01 )
+  {
+    config.spine_position_influence = 1.0 - config.spine_velocity_influence;
+    spine_position_influence_ = config.spine_position_influence;
+    spine_velocity_influence_ = config.spine_velocity_influence;
+  }
+  if ( config.arm_velocity_influence > arm_velocity_influence_ + 0.01 || config.arm_velocity_influence < arm_velocity_influence_ - 0.01 )
+  {
+    config.arm_position_influence = 1.0 - config.arm_velocity_influence;
+    arm_position_influence_ = config.arm_position_influence;
+    arm_velocity_influence_ = config.arm_velocity_influence;
+  }
+  
+  ROS_INFO("New control parameters set");
 }
 
+
+
+//
+//  Callback function when a new height calibration is received
+//
 void heigth_cb( const std_msgs::Float32ConstPtr& height )
 {
   if( calibrate_height_ )
   {
-    height_camera_ = (-1.0) * height->data;
-    double temp = (height_camera_ - SPINE_MIN_HEIGHT) / (SPINE_LENGTH) * SPINE_ENCODER_MARKS_ON_STROKE;
-    uint32_t initial_encoder_ticks = (uint32_t) temp;
-    ROS_INFO("camera calibrated at %fm, spine height set to %u encoder ticks", height_camera_, initial_encoder_ticks);
-    spine_driver_position_->getEncoderPtr()->setPosition(initial_encoder_ticks);
+    height_spine_ = (-1.0) * height->data + CAMERA_TO_SPINE;  // height of camera + offset
+    double temp = (height_spine_ - SPINE_MIN_HEIGHT) / (SPINE_LENGTH) * SPINE_ENCODER_TICKS_ON_STROKE;
+    int32_t encoder_ticks = (int32_t) temp;
+    ROS_INFO("camera calibrated at %fm, spine height set to %u encoder ticks", height_spine_, encoder_ticks);
+    spine_driver_position_->getEncoderPtr()->setPosition(encoder_ticks);
   }
 }
 
 
+
+//
+//  Callback function when a new Trajectroy is received from moveit
+//
 void trajectory_cb ( const moveit_msgs::MoveGroupActionResultConstPtr& desired )
 {
   if( desired->status.status != 3 ) // trajectory execution not complete
@@ -244,6 +248,10 @@ void trajectory_cb ( const moveit_msgs::MoveGroupActionResultConstPtr& desired )
 }
 
 
+
+//
+//  Main 
+//
 int main(int argc, char **argv) 
 {
   //
@@ -253,35 +261,31 @@ int main(int argc, char **argv)
   ros::NodeHandle nh;
   ros::NodeHandle nh_feedback("~");
   
+  //
+  // set up Arduino
+  //
   std::string hw_id_arm;
   std::string hw_id_spine;  
   nh.param<std::string>( "hardware_id_arm", hw_id_arm, "/dev/ttyACM0" );
   nh.param<std::string>( "hardware_id_spine", hw_id_spine, "/dev/ttyACM1" );
   
+  //
+  // set up controlable joints and robot states
+  //
   joint_names_.resize(2);
   joint_names_[SPINE] = "spine";
   joint_names_[ARM] = "arm";
+  // stores current position and velocity readings for all controlable joints
+  double current_position[joint_names_.size()];
+  double current_velocity[joint_names_.size()];
   
-  double current_position[joint_names_.size()], current_velocity[joint_names_.size()];
-  
-  uint32_t force_counter = 0;
-  
-  height_camera_ = 0.0;
-  
+  // set up robot joint state
   sensor_msgs::JointState robot_state;
   robot_state.name.resize(2);
   robot_state.position.resize(2);
   robot_state.velocity.resize(2);
   robot_state.name[SPINE] ="spine";
   robot_state.name[ARM] ="arm";
-  //robot_state.name[2] ="single_finger";
-  //robot_state.name[3] ="double_finger";
-  
-  //robot_state.position[2] = 0.0;
-  //robot_state.velocity[2] = 0.0;
-  //robot_state.position[3] = 0.0;
-  //robot_state.velocity[3] = 0.0;
-  
   
   // create lookup table with the same size as the number of joints 
   lookup.resize( joint_names_.size() );
@@ -290,6 +294,7 @@ int main(int argc, char **argv)
   //
   //  Create joint drivers for Spine
   //
+  // create Arduino object and initialize
   NewArduinoInterface Arduino_Spine( hw_id_spine );
   if( Arduino_Spine.initialize() == false)
   {
@@ -298,32 +303,29 @@ int main(int argc, char **argv)
 
   // create joint driver for position control for the spine
   spine_driver_position_.reset( new JointDriver(
-          &Arduino_Spine,                                                                                           // hardware interface
-          SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,           // Motor pins and settings
-          SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, CREATE_NEW_ENCODER, SPINE_LENGTH,  // Encoder pins and settings
-          JointDriver::POSITION)); 	                                                                                // Joint control mode
+          &Arduino_Spine,                                                                                  // hardware interface
+          SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,  // Motor pins and settings
+          SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_TICKS_ON_STROKE / 4.0, CREATE_NEW_ENCODER, // Encoder pins and settings; ticks=4*marks
+          SPINE_LENGTH, JointDriver::POSITION)); 	                                                         // Joint settings
   // initalize joint and connected hardware
   spine_driver_position_->initialize(); 
-  // invert encoder values
-  // spine_driver_position_->getEncoderPtr()->invertOutput();
   // retrieve encoder id to use in next joint driver
   spine_encoder_id_ = spine_driver_position_->getEncoderPtr()->getEncoderID();
   
   // creat joint driver for velocity control for the spine
   spine_driver_velocity_.reset( new JointDriver( 
-          &Arduino_Spine,                                                                                           // hardware interface
-          SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,           // Motor pins and settings
-          SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_MARKS_ON_STROKE, spine_encoder_id_, SPINE_LENGTH,   // Encoder pins and settings
-          JointDriver::VELOCITY)); 	                                                                                // Joint control mode
+          &Arduino_Spine,                                                                                  // hardware interface
+          SPINE_PWM_PIN, SPINE_PWM_FREQUENCY, SPINE_DIRECTION_CONTROL1_PIN, SPINE_DIRECTION_CONTROL2_PIN,  // Motor pins and settings
+          SPINE_ENCODER1_PIN, SPINE_ENCODER2_PIN, SPINE_ENCODER_TICKS_ON_STROKE / 4.0, spine_encoder_id_,  // Encoder pins and settings; ticks=4*marks
+          SPINE_LENGTH, JointDriver::VELOCITY)); 	                                                         // Joint setting
   // initalize joint and connected hardware
   spine_driver_velocity_->initialize();
-  // invert encoder values
-  // spine_driver_velocity_->getEncoderPtr()->invertOutput();
 
 	
 	//
   // create joint drivers for arm
 	//
+	// create Arduino object and initialize
 	NewArduinoInterface Arduino_Arm( hw_id_arm );
   if( Arduino_Arm.initialize() == false)
   {
@@ -377,27 +379,17 @@ int main(int argc, char **argv)
 	//
 	// dynamic reconfigure settings
 	//
-  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig> server_spine;
-  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig>::CallbackType spine_config;
-  spine_config = boost::bind(&spine_cb, _1, _2);
-  server_spine.setCallback(spine_config);
+  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig> server;
+  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig>::CallbackType config;
+  config = boost::bind(&dynamic_cb, _1, _2);
+  server.setCallback(config);
   
-	dynamic_reconfigure::Server<uplift_joint_manager::JointConfig> server_arm;
-  dynamic_reconfigure::Server<uplift_joint_manager::JointConfig>::CallbackType arm_config;
-  arm_config = boost::bind(&arm_cb, _1, _2);
-  server_arm.setCallback(arm_config);
-  
-  
+  uint32_t force_counter = 0;
   ROS_INFO("Running control loop");
   ros::Rate loop_rate_Hz(100);
   ros::Duration duration_between_points;
 
 
-  // set camera height to a random value to make it work without calibration
-  height_camera_ = 0.7;
-  
-  
-    
   while ( ros::ok() )
   {
     // record time of measurements
@@ -483,7 +475,7 @@ int main(int argc, char **argv)
     ROS_DEBUG("spine position: current:%f  target:%f  output:%f", current_position[SPINE], target_position_spine, output_position_control_spine );
     
     // weigh position and velocity output and apply
-    spine_driver_velocity_->applyOutput( (output_velocity_control_spine * velocity_influence_) + (output_position_control_spine * position_influence_) );
+    spine_driver_velocity_->applyOutput( (output_velocity_control_spine * spine_velocity_influence_) + (output_position_control_spine * spine_position_influence_) );
     
     // publish feedback information
     std_msgs::Float64 temp;
@@ -497,18 +489,18 @@ int main(int argc, char **argv)
     // ARM control
     // extract trajectory target information and apply new control to arm motor
     //
-    double target_velocity_arm = (-1) * trajectory_desired_->points[point_counter_].velocities[lookup[ARM]];  // adjust rotation direction
+    double target_velocity_arm = (-1.0) * trajectory_desired_->points[point_counter_].velocities[lookup[ARM]];  // adjust rotation direction
     double output_velocity_control_arm = arm_driver_velocity_->compute( current_velocity[ARM], target_velocity_arm ); 
                   
     ROS_DEBUG("arm velocity: current:%f  target:%f  output:%f", current_velocity[ARM], target_velocity_arm, output_velocity_control_arm );
     
-    double target_position_arm = (-1) * trajectory_desired_->points[point_counter_].positions[lookup[ARM]];  // adjust rotation direction
+    double target_position_arm = (-1.0) * trajectory_desired_->points[point_counter_].positions[lookup[ARM]];  // adjust rotation direction
     double output_position_control_arm = arm_driver_position_->compute( current_position[ARM], target_position_arm );
     
     ROS_DEBUG("arm position: current:%f  target:%f  output:%f", current_position[ARM], target_position_arm, output_position_control_arm );
     
     // weigh position and velocity output and apply
-    arm_driver_velocity_->applyOutput( (output_velocity_control_arm * velocity_influence_) + (output_position_control_arm * position_influence_) );
+    arm_driver_velocity_->applyOutput( (output_velocity_control_arm * arm_velocity_influence_) + (output_position_control_arm * arm_position_influence_) );
     
     
     //
