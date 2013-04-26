@@ -1,0 +1,10 @@
+<launch>
+  <arg name="camera" default="camera" />
+
+  <arg name="pi" value="3.141592654" />
+  <arg name="pi/2" value="1.570796327" />
+  <arg name="optical_rotate" value="0 0 0 $(arg pi) -$(arg pi/2) $(arg pi/2)" />
+
+  <node pkg="tf" type="static_transform_publisher" name="$(arg camera)_uplift"
+        args="$(arg optical_rotate) /$(arg camera) /$(arg camera)_link 100" />  
+</launch>

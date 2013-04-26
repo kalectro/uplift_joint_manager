@@ -1,0 +1,32 @@
+<!-- Launch the Uplift -->
+<launch>
+  <arg name="calibrate" default="True" />
+  
+  <node pkg="uplift_joint_manager" type="uplift_joint_manager" name="uplift_joint_manager" >
+  <param name="spine_position_influence" value="0.7" />
+  <param name="spine_velocity_influence" value="0.3" />
+  <param name="spine_control_mode" value="0" />
+  <param name="spine_p_gain" value="20" />
+  <param name="spine_i_gain" value="10" />
+  <param name="spine_d_gain" value="20" />
+  <param name="spine_max_integral" value="0.5" />
+  <param name="spine_motor_mode" value="0" />
+  <param name="calibrate_height" value="$(arg calibrate)" />
+  
+  <param name="arm_position_influence" value="0.7" />
+  <param name="arm_velocity_influence" value="0.3" />
+  <param name="arm_control_mode" value="0" />
+  <param name="arm_p_gain" value="20" />
+  <param name="arm_i_gain" value="10" />
+  <param name="arm_d_gain" value="20" />
+  <param name="arm_max_integral" value="0.5" />
+  <param name="arm_motor_mode" value="0" />
+  </node>
+  
+  <include file="$(find uplift_joint_manager)/launch/camera.launch" />
+  <include file="$(find openni_launch)/launch/openni.launch" />
+  <include file="$(find moveuplift)/launch/demo.launch" />
+  
+  <node if="$(arg calibrate)" pkg="height_detector" type="height_detector" name="height_detector" />
+  
+</launch>
