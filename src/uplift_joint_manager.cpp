@@ -106,21 +106,21 @@ void dynamic_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
   
   
   // convert enums from cfg file into the in the h files
-  motor_drive_mode spine_motor_mode = (motor_drive_mode)config.spine_motor_mode;
-  motor_drive_mode arm_motor_mode = (motor_drive_mode)config.arm_motor_mode;
+  H_bridgeDriver::motor_drive_mode spine_motor_mode = (H_bridgeDriver::motor_drive_mode)config.spine_motor_mode;
+  H_bridgeDriver::motor_drive_mode arm_motor_mode = (H_bridgeDriver::motor_drive_mode)config.arm_motor_mode;
   
   switch ( spine_motor_mode )
   {
-    case DRIVE: spine_disabled_ = false; break;
-    case FREE_RUNNING: spine_disabled_ = true; break;
-    case BRAKE: spine_disabled_ = true; break;
+    case H_bridgeDriver::DRIVE: spine_disabled_ = false; break;
+    case H_bridgeDriver::FREE_RUNNING: spine_disabled_ = true; break;
+    case H_bridgeDriver::BRAKE: spine_disabled_ = true; break;
     default: ROS_ERROR("bad motor mode");
   }
   switch ( arm_motor_mode )
   {
-    case DRIVE: arm_disabled_ = false; break;
-    case FREE_RUNNING: arm_disabled_ = true; break;
-    case BRAKE: arm_disabled_ = true; break;
+    case H_bridgeDriver::DRIVE: arm_disabled_ = false; break;
+    case H_bridgeDriver::FREE_RUNNING: arm_disabled_ = true; break;
+    case H_bridgeDriver::BRAKE: arm_disabled_ = true; break;
     default: ROS_ERROR("bad motor mode");
   }
   arm_driver_position_->setMode( arm_motor_mode );
@@ -284,8 +284,8 @@ int main(int argc, char **argv)
   robot_state.name.resize(2);
   robot_state.position.resize(2);
   robot_state.velocity.resize(2);
-  robot_state.name[SPINE] ="spine";
-  robot_state.name[ARM] ="arm";
+  robot_state.name[SPINE] = joint_names_[SPINE];
+  robot_state.name[ARM] = joint_names_[ARM];
   
   // create lookup table with the same size as the number of joints 
   lookup.resize( joint_names_.size() );
@@ -299,6 +299,7 @@ int main(int argc, char **argv)
   if( Arduino_Spine.initialize() == false)
   {
     ROS_ERROR("Error initializing Arduino_Spine");
+    return -1;
   }  
 
   // create joint driver for position control for the spine
@@ -330,6 +331,7 @@ int main(int argc, char **argv)
   if( Arduino_Arm.initialize() == false)
   {
     ROS_ERROR("Error initializing Arduino_Arm");
+    return -1;
   }
   
   // create joint driver for position control for the arm
