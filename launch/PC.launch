@@ -1,0 +1,6 @@
+<!-- Launch the Uplift -->
+<launch>
+  <include file="$(find uplift_joint_manager)/launch/camera.launch" />
+  <include file="$(find openni_launch)/launch/openni.launch" />
+  <include file="$(find moveuplift)/launch/demo.launch" />
+</launch>
