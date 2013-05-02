@@ -108,10 +108,10 @@ JointPtr spine_driver_position_;
 JointPtr spine_driver_velocity_;
 uint8_t spine_encoder_id_;
 boost::shared_ptr< TrajectoryMsg > trajectory_desired_;
-double spine_position_influence_ = 0.9;
-double spine_velocity_influence_ = 0.1;
-double arm_position_influence_ = 0.9;
-double arm_velocity_influence_ = 0.1;
+double spine_position_influence_ = 0.8;
+double spine_velocity_influence_ = 0.2;
+double arm_position_influence_ = 0.8;
+double arm_velocity_influence_ = 0.2;
 ros::Time start_time_trajectory_;
 double roll_, pitch_, yaw_;
 float height_spine_;
@@ -123,6 +123,7 @@ bool successful_grab_ = false;
 bool reached_gripper_limit_ = false;
 double gripper_last_position_ = -1.0;  // make sure this position cannot be the initial state
 ros::Time gripper_action_time_(0, 0); // make sure gripper is moved in the beginning
+uint32_t force_counter = 0; // counts up when maximum force is applied and can interrupt 
 
 // maps joint names in message to known joints
 std::vector<int> lookup;

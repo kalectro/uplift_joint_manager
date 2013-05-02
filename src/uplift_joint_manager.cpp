@@ -180,6 +180,23 @@ void dynamic_cb( uplift_joint_manager::JointConfig &config, uint32_t level )
     arm_velocity_influence_ = config.arm_velocity_influence;
   }
   
+  if( config.gripper_status == true )
+  {
+    gripper_target_ = GRIPPER_CLOSE;
+    ROS_INFO("Closing gripper");
+    pickup = false;
+  }
+  else
+  {
+    gripper_target_ = GRIPPER_OPEN;
+    ROS_INFO("Opening gripper");
+    pickup = true;
+  }
+  reached_gripper_limit_ = false;
+  successful_grab_ = false;
+  force_counter = 0;
+  // set action time to infinity
+  gripper_action_time_ = ros::Time((uint32_t)ULONG_MAX, 0);
   ROS_INFO("New control parameters set");
 }
 
@@ -386,7 +403,6 @@ int main(int argc, char **argv)
   config = boost::bind(&dynamic_cb, _1, _2);
   server.setCallback(config);
   
-  uint32_t force_counter = 0;
   ROS_INFO("Running control loop");
   ros::Rate loop_rate_Hz(100);
   ros::Duration duration_between_points;
